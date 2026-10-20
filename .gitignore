@@ -41,11 +41,16 @@ lerna-debug.log*
 
 # EcoCompress AI Artifacts, Models & Caches
 artifacts/
+exports/
 .cache/
 data/*.db
 data/*.db-journal
 data/*.sqlite
 data/*.sqlite3
+*.safetensors
+*.bin
+*.pt
+*.onnx
 
 # Local Environment Variables & Secrets
 .env

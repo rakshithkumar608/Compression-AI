@@ -254,3 +254,30 @@ class BenchmarkDetailResponse(BaseModel):
     limitations: List[str] = Field(default_factory=list)
     notes: Optional[str] = None
     recorded_at: str
+
+
+class ExportPackageResponse(BaseModel):
+    export_id: str
+    experiment_id: str
+    package_directory: str
+    archive_path: Optional[str] = None
+    archive_size_mb: Optional[float] = None
+    archive_sha256: Optional[str] = None
+    files_count: int
+    manifest: Dict[str, Any]
+
+
+class ExportVerifyRequest(BaseModel):
+    target_path: Optional[str] = None
+    export_id: Optional[str] = None
+
+
+class ExportVerifyResponse(BaseModel):
+    passed: bool
+    verified_files_count: int
+    total_expected_files: int
+    verified_files: List[str]
+    missing_files: List[str]
+    mismatched_files: List[Dict[str, Any]]
+    manifest: Optional[Dict[str, Any]] = None
+

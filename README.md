@@ -63,48 +63,52 @@ EcoCompress AI/
 
 ## 3. How to Launch and Inspect
 
-### 3.1 Running the Frontend Dashboard
-Navigate to `apps/web` and start the development server:
+### 3.1 Running Backend & Frontend Together
 
-```powershell
-cd "D:\Projects\Compression AI\apps\web"
-npm run dev
-```
+1. **Start the FastAPI Backend Service:**
+   ```powershell
+   cd "D:\Projects\Compression AI"
+   python services/api/main.py
+   ```
+   * Live API available at: `http://127.0.0.1:8000`
+   * Interactive Swagger documentation at: `http://127.0.0.1:8000/docs`
+   * Automatically initializes SQLite database at `data/ecocompress.db`.
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+2. **Start the Next.js Frontend (in a separate terminal):**
+   ```powershell
+   cd "D:\Projects\Compression AI\apps\web"
+   npm run dev
+   ```
+   * Open [http://localhost:3000](http://localhost:3000) in your browser.
+   * Header status will indicate `🟢 API: Online`.
+   * Configured experiments in the "New Experiment" tab are persisted to SQLite and appear in the "Dashboard Overview" table with real-time status and cancellation controls.
 
-**Features in the Phase 1 UI:**
-* **Dashboard Overview:** Displays live hardware telemetry (RTX 2050 4GB VRAM, RAM, D: drive free space) and recent experiments.
-* **Illustrative Preview Toggle:** Switch between a clean workspace and an illustrative preview of a DistilBERT ONNX INT8 compression benchmark, prominently watermarked as a non-fabricated preview.
-* **Model Workspace & Safe Inspector:** Browse supported model presets (`distilbert-base-uncased`, `Qwen/Qwen2.5-0.5B`, `HuggingFaceTB/SmolLM-135M`) or inspect custom Hugging Face model IDs. Automatically evaluates VRAM envelope feasibility against the 4GB hardware limit.
-* **Experiment Setup Wizard:** Configure task workloads, evaluation sample sizes, batch sizes, quantization backends, and acceptance thresholds.
-* **Results & Comparison View:** Side-by-side comparison of baseline vs candidate metrics (artifact size, latency, memory, task quality, energy, and carbon) with acceptance gate reasoning.
-* **Environmental Methodology:** Transparent documentation of measured vs estimated metrics and the anti-greenwashing policy for water consumption.
-* **Host Diagnostics:** Hardware and runtime telemetry breakdown.
+---
 
-### 3.2 Running the Backend API
-Navigate to `services/api` and start the FastAPI service:
+## 4. Phase 2 API Endpoints
 
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Service readiness and phase status. |
+| `GET` | `/system` | Read-only hardware telemetry (RAM, drives, RTX 2050 profile). |
+| `POST` | `/experiments` | Creates and validates a new experiment record in SQLite. |
+| `GET` | `/experiments` | Retrieves paginated experiment summaries ordered by creation date. |
+| `GET` | `/experiments/{id}` | Retrieves complete experiment configuration, thresholds, and outcomes. |
+| `POST` | `/experiments/{id}/run` | Enqueues an experiment into the background queue (`created` $\rightarrow$ `queued`). |
+| `POST` | `/experiments/{id}/cancel` | Cancels an eligible active experiment (rejects terminal states). |
+
+---
+
+## 5. Running Automated Tests
+
+Run the complete backend test suite (contract tests, persistence, state transitions, sanitization):
 ```powershell
 cd "D:\Projects\Compression AI"
-python services/api/main.py
+python -m unittest discover -s tests -p "test_*.py" -v
 ```
+*(All 14 unit and integration tests run against isolated temporary test databases without altering the dev database).*
 
-Endpoints available at [http://127.0.0.1:8000](http://127.0.0.1:8000):
-* `GET /health` — Service readiness check.
-* `GET /system` — Read-only hardware telemetry and storage status.
-* `GET /docs` — Interactive OpenAPI / Swagger UI.
-
-### 3.3 Running Automated Tests
-Run the API unit test suite:
-
-```powershell
-cd "D:\Projects\Compression AI"
-python tests/test_api_health.py
-```
-
-Run frontend linting & static build validation:
-
+Run frontend type checks and static production build:
 ```powershell
 cd "D:\Projects\Compression AI\apps\web"
 npm run lint
@@ -113,10 +117,9 @@ npm run build
 
 ---
 
-## 4. Roadmap to Phase 2
+## 6. Roadmap to Phase 3
 
-Now that Phase 1 (Repository Foundation & UI Dashboard) is complete, **Phase 2** will introduce:
-1. **SQLite Database Layer:** Schema for `experiments`, `model_profiles`, `benchmark_results`, and `jobs`.
-2. **FastAPI Experiment Endpoints:** `POST /experiments`, `GET /experiments`, `GET /experiments/{id}`, and `POST /experiments/{id}/run`.
-3. **Decoupled Job Queue Engine:** Background task dispatcher managing job states (`queued` $\rightarrow$ `completed`/`failed`) without blocking HTTP handlers.
-4. **Mock Execution Fixture:** End-to-end integration test verifying the API contract and frontend communication prior to downloading real ML model weights.
+Now that Phase 2 (Persistent API & Experiment Lifecycle) is complete, **Phase 3** will introduce:
+1. **Model Source & License Verification:** Inspecting Hugging Face repositories, revisions, `.safetensors` header metadata, and license terms without downloading complete weight tensors.
+2. **Device & VRAM Feasibility Gates:** Dynamic evaluation of GPU memory headroom vs expected model activation footprint.
+3. **Hardware Runtime Detector:** Validating CUDA device capabilities and fallback error paths for unsupported architectures.

@@ -1,8 +1,9 @@
 "use client";
 
-import React from "react";
-import { Cpu, HardDrive, ShieldCheck, Activity } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Cpu, HardDrive, ShieldCheck, Activity, Wifi, WifiOff } from "lucide-react";
 import { HOST_SYSTEM_DIAGNOSTICS } from "@/lib/illustrativeData";
+import { api } from "@/lib/api";
 
 interface HeaderProps {
   isIllustrativeActive: boolean;
@@ -13,6 +14,26 @@ export const Header: React.FC<HeaderProps> = ({
   isIllustrativeActive,
   setIsIllustrativeActive,
 }) => {
+  const [apiOnline, setApiOnline] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkApi = async () => {
+      try {
+        const res = await api.getHealth();
+        if (isMounted) setApiOnline(res.status === "healthy");
+      } catch {
+        if (isMounted) setApiOnline(false);
+      }
+    };
+    checkApi();
+    const interval = setInterval(checkApi, 10000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
     <header className="border-b border-slate-800 bg-[#0e1626]/90 backdrop-blur sticky top-0 z-40 px-6 py-3.5">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -25,15 +46,44 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-2">
               <span className="font-semibold text-lg tracking-tight text-white">EcoCompress AI</span>
               <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                Phase 1 MVP
+                Phase 2 Core API
               </span>
             </div>
             <p className="text-xs text-slate-400">Evidence-Based Model Compression & Benchmarking Workbench</p>
           </div>
         </div>
 
-        {/* Hardware Status Strip */}
+        {/* Hardware & API Status Strip */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
+          {/* API Backend Status */}
+          <div
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs transition ${
+              apiOnline === true
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                : apiOnline === false
+                ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                : "bg-slate-800 border-slate-700 text-slate-400"
+            }`}
+            title={apiOnline === false ? "FastAPI backend offline. Run 'python services/api/main.py'" : "Backend connected"}
+          >
+            {apiOnline === true ? (
+              <>
+                <Wifi className="h-3.5 w-3.5 text-emerald-400" />
+                <span>API: Online</span>
+              </>
+            ) : apiOnline === false ? (
+              <>
+                <WifiOff className="h-3.5 w-3.5 text-amber-400" />
+                <span>API: Offline</span>
+              </>
+            ) : (
+              <>
+                <Activity className="h-3.5 w-3.5 text-slate-400 animate-pulse" />
+                <span>API: Checking...</span>
+              </>
+            )}
+          </div>
+
           {/* GPU Badge */}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-300">
             <Cpu className="h-3.5 w-3.5 text-blue-400" />

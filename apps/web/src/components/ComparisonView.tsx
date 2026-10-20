@@ -35,7 +35,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
 * **Quality Score:** ${exp.baseline?.qualityScore.value}% → ${exp.candidate?.qualityScore.value}% (-0.65% relative)
 
 ### Acceptance Rationale:
-${exp.acceptanceDecision?.reasons.map((r) => `- ${r}`).join("\n")}
+${exp.acceptanceDecision?.reasons.map((r: string) => `- ${r}`).join("\n")}
 
 ---
 
@@ -155,7 +155,7 @@ ${exp.acceptanceDecision?.reasons.map((r) => `- ${r}`).join("\n")}
 
         {/* Reason Checklist */}
         <div className="mt-4 pt-4 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-          {exp.acceptanceDecision?.reasons.map((reason, idx) => (
+          {exp.acceptanceDecision?.reasons.map((reason: string, idx: number) => (
             <div key={idx} className="flex items-start gap-2 text-slate-300">
               <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
               <span>{reason}</span>

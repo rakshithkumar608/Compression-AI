@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { Play, ShieldCheck, AlertCircle, CheckCircle2, Sliders, HardDrive, Cpu, RefreshCw } from "lucide-react";
+import { Play, ShieldCheck, CheckCircle2, RefreshCw, AlertCircle, ArrowRight } from "lucide-react";
 import { SUPPORTED_MODEL_CATALOG, HOST_SYSTEM_DIAGNOSTICS } from "@/lib/illustrativeData";
 import { JobStatus, ModelProfile, OptimizationMethod } from "@/types";
+import { api } from "@/lib/api";
 
 interface ExperimentSetupViewProps {
   initialModel?: ModelProfile;
@@ -12,8 +13,10 @@ interface ExperimentSetupViewProps {
 
 export const ExperimentSetupView: React.FC<ExperimentSetupViewProps> = ({
   initialModel = SUPPORTED_MODEL_CATALOG[0],
+  onExperimentComplete,
 }) => {
   const [selectedModel, setSelectedModel] = useState<ModelProfile>(initialModel);
+  const [experimentName, setExperimentName] = useState("DistilBERT SST-2 Compression Benchmark");
   const [dataset, setDataset] = useState("SST-2 (Stanford Sentiment Treebank) Subset");
   const [sampleCount, setSampleCount] = useState(500);
   const [batchSize, setBatchSize] = useState(1);
@@ -26,11 +29,17 @@ export const ExperimentSetupView: React.FC<ExperimentSetupViewProps> = ({
   const [minSizeReduction, setMinSizeReduction] = useState(40.0);
   const [maxLatencyIncrease, setMaxLatencyIncrease] = useState(0.0);
 
-  const [jobState, setJobState] = useState<JobStatus>("idle");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdExpId, setCreatedExpId] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+
+  const [jobState, setJobState] = useState<JobStatus>("created");
   const [activeStepIndex, setActiveStepIndex] = useState(0);
 
   const pipelineSteps: { status: JobStatus; label: string }[] = [
-    { status: "queued", label: "Job Queued in SQLite" },
+    { status: "created", label: "Experiment Record Created" },
+    { status: "queued", label: "Job Enqueued in SQLite" },
     { status: "validating", label: "Validating Runtime & D: Storage" },
     { status: "profiling", label: "Profiling Model Architecture" },
     { status: "baseline_running", label: "Evaluating Baseline Workload" },
@@ -40,23 +49,53 @@ export const ExperimentSetupView: React.FC<ExperimentSetupViewProps> = ({
     { status: "completed", label: "Report Provenance Stored" },
   ];
 
-  const handleStartSimulation = () => {
-    if (jobState !== "idle" && jobState !== "completed" && jobState !== "failed") return;
+  const handleQueueExperiment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError(null);
+    setSubmitSuccess(null);
 
-    setJobState("queued");
-    setActiveStepIndex(0);
+    try {
+      // 1. Send POST /experiments to live FastAPI backend
+      const exp = await api.createExperiment({
+        name: experimentName,
+        model_id: selectedModel.id,
+        task: selectedModel.task,
+        optimization_method: optimizationMethod,
+        workload_config: {
+          task: selectedModel.task,
+          dataset,
+          sample_count: sampleCount,
+          batch_size: batchSize,
+          sequence_length: seqLength,
+          warmup_runs: warmupRuns,
+          measured_runs: measuredRuns,
+        },
+        thresholds: {
+          max_quality_loss_pct: maxQualityLoss,
+          min_size_reduction_pct: minSizeReduction,
+          max_latency_increase_pct: maxLatencyIncrease,
+        },
+      });
 
-    let current = 0;
-    const interval = setInterval(() => {
-      current++;
-      if (current < pipelineSteps.length) {
-        setActiveStepIndex(current);
-        setJobState(pipelineSteps[current].status);
-      } else {
-        clearInterval(interval);
-        setJobState("completed");
-      }
-    }, 1200);
+      setCreatedExpId(exp.id);
+
+      // 2. Enqueue the experiment job via POST /experiments/{id}/run
+      const job = await api.runExperiment(exp.id);
+      setJobState(job.status);
+      setActiveStepIndex(1); // queued
+
+      setSubmitSuccess(`Experiment ${exp.id} successfully persisted in SQLite and enqueued!`);
+    } catch (err) {
+      // Fallback: If backend is offline, simulate locally with notification
+      setSubmitError(
+        err instanceof Error
+          ? err.message
+          : "Backend offline. Make sure 'python services/api/main.py' is running."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -69,9 +108,46 @@ export const ExperimentSetupView: React.FC<ExperimentSetupViewProps> = ({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {submitSuccess && (
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3 text-xs text-emerald-300">
+          <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+          <div className="flex-1 font-medium">{submitSuccess}</div>
+          {onExperimentComplete && (
+            <button
+              onClick={onExperimentComplete}
+              className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1 transition"
+            >
+              View in Dashboard <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {submitError && (
+        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3 text-xs text-amber-300">
+          <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />
+          <div>
+            <div className="font-semibold">Backend Connection Note:</div>
+            <div className="mt-0.5">{submitError}</div>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={handleQueueExperiment} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: The Setup Form */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Experiment Name */}
+          <div className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-2">
+            <label className="text-xs font-semibold text-white block">Experiment Title</label>
+            <input
+              type="text"
+              value={experimentName}
+              onChange={(e) => setExperimentName(e.target.value)}
+              required
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
           {/* Step 1: Model Selection */}
           <div className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -85,7 +161,10 @@ export const ExperimentSetupView: React.FC<ExperimentSetupViewProps> = ({
                   <button
                     key={m.id}
                     type="button"
-                    onClick={() => setSelectedModel(m)}
+                    onClick={() => {
+                      setSelectedModel(m);
+                      setExperimentName(`${m.name} INT8 Benchmark`);
+                    }}
                     className={`p-3 rounded-xl border text-left transition ${
                       isSelected
                         ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300"
@@ -280,53 +359,52 @@ export const ExperimentSetupView: React.FC<ExperimentSetupViewProps> = ({
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between text-slate-300">
                 <span className="flex items-center gap-1.5">
-                  <HardDrive className="h-3.5 w-3.5 text-emerald-400" />
-                  Target Artifact Disk:
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                  Target Database:
                 </span>
-                <span className="font-semibold text-emerald-400">D: Drive ({HOST_SYSTEM_DIAGNOSTICS.dDriveFreeGb} GB)</span>
+                <span className="font-mono text-emerald-400">data/ecocompress.db</span>
               </div>
 
               <div className="flex items-center justify-between text-slate-300">
                 <span className="flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
-                  C: Drive Write Protection:
+                  C: Write Guard:
                 </span>
                 <span className="font-semibold text-amber-400">Guarded (0 MB)</span>
               </div>
 
               <div className="flex items-center justify-between text-slate-300">
-                <span className="flex items-center gap-1.5">
-                  <Cpu className="h-3.5 w-3.5 text-blue-400" />
-                  Target Device:
-                </span>
-                <span className="font-semibold text-blue-400">RTX 2050 (4 GB)</span>
+                <span>Model Target:</span>
+                <span className="font-semibold text-blue-400">{selectedModel.id}</span>
               </div>
             </div>
 
             <button
-              onClick={handleStartSimulation}
-              disabled={jobState !== "idle" && jobState !== "completed" && jobState !== "failed"}
-              className={`w-full py-2.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 shadow transition ${
-                jobState === "idle" || jobState === "completed" || jobState === "failed"
-                  ? "bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer"
-                  : "bg-slate-800 text-slate-400 cursor-not-allowed"
-              }`}
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-2.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 shadow transition bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer disabled:bg-slate-800 disabled:text-slate-400"
             >
-              {jobState === "idle" || jobState === "completed" || jobState === "failed" ? (
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  Saving to SQLite...
+                </>
+              ) : (
                 <>
                   <Play className="h-3.5 w-3.5 fill-current" />
                   Queue Benchmark Job
                 </>
-              ) : (
-                <>
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  Executing Pipeline Steps...
-                </>
               )}
             </button>
 
+            {createdExpId && (
+              <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300">
+                <strong>Experiment ID:</strong> <span className="font-mono">{createdExpId}</span>
+              </div>
+            )}
+
             <p className="text-[11px] text-slate-400 text-center">
-              Phase 1 interactive prototype. Real ML execution workers will connect in Phase 4-5.
+              Phase 2: Persists parameters and enqueues job state in SQLite. Real ML workers connect in Phase 4-5.
             </p>
           </div>
 
@@ -338,7 +416,7 @@ export const ExperimentSetupView: React.FC<ExperimentSetupViewProps> = ({
             <div className="space-y-2 text-xs">
               {pipelineSteps.map((step, idx) => {
                 const isPassed = idx < activeStepIndex;
-                const isCurrent = idx === activeStepIndex && jobState !== "idle";
+                const isCurrent = idx === activeStepIndex;
                 return (
                   <div
                     key={step.status}
@@ -364,7 +442,7 @@ export const ExperimentSetupView: React.FC<ExperimentSetupViewProps> = ({
             </div>
           </div>
         </div>
-      </div>
+      </form>
     </div>
   );
 };

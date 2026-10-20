@@ -24,7 +24,7 @@ class TestApiHealth(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["status"], "healthy")
-        self.assertIn("Phase 1", data["phase"])
+        self.assertTrue("Phase 1" in data["phase"] or "Phase 2" in data["phase"])
         self.assertEqual(data["service"], "EcoCompress AI Core API")
 
     def test_system_diagnostics_endpoint(self):

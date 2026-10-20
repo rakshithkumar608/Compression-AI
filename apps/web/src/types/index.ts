@@ -7,7 +7,7 @@ export type OptimizationMethod =
   | "bitsandbytes-4bit";
 
 export type JobStatus = 
-  | "idle" 
+  | "created"
   | "queued" 
   | "validating" 
   | "profiling" 
@@ -35,17 +35,17 @@ export interface ModelProfile {
 export interface WorkloadConfig {
   task: ModelTask;
   dataset: string;
-  sampleCount: number;
-  batchSize: number;
-  sequenceLength: number;
-  warmupRuns: number;
-  measuredRuns: number;
+  sample_count: number;
+  batch_size: number;
+  sequence_length: number;
+  warmup_runs: number;
+  measured_runs: number;
 }
 
 export interface AcceptanceThresholds {
-  maxQualityLossPct: number;
-  minSizeReductionPct: number;
-  maxLatencyIncreasePct: number;
+  max_quality_loss_pct: number;
+  min_size_reduction_pct: number;
+  max_latency_increase_pct: number;
 }
 
 export interface MetricValue {
@@ -60,10 +60,16 @@ export interface BenchmarkMetrics {
   medianLatencyMs: MetricValue;
   p95LatencyMs: MetricValue;
   peakMemoryMb: MetricValue;
-  qualityScore: MetricValue; // e.g. Accuracy or Perplexity
+  qualityScore: MetricValue;
   energyJoules: MetricValue;
   carbonGrams: MetricValue;
   waterMilliliters: MetricValue;
+}
+
+export interface AcceptanceDecision {
+  passed: boolean;
+  reasons: string[];
+  timestamp: string;
 }
 
 export interface ExperimentRun {
@@ -73,15 +79,112 @@ export interface ExperimentRun {
   status: JobStatus;
   isIllustrativeDemo: boolean;
   model: ModelProfile;
-  workload: WorkloadConfig;
+  workload: {
+    task: ModelTask;
+    dataset: string;
+    sampleCount: number;
+    batchSize: number;
+    sequenceLength: number;
+    warmupRuns: number;
+    measuredRuns: number;
+  };
   optimizationMethod: OptimizationMethod;
-  thresholds: AcceptanceThresholds;
+  thresholds: {
+    maxQualityLossPct: number;
+    minSizeReductionPct: number;
+    maxLatencyIncreasePct: number;
+  };
   baseline?: BenchmarkMetrics;
   candidate?: BenchmarkMetrics;
-  acceptanceDecision?: {
-    passed: boolean;
-    reasons: string[];
-    timestamp: string;
+  acceptanceDecision?: AcceptanceDecision;
+}
+
+export interface ExperimentResponse {
+  id: string;
+  name: string;
+  model_id: string;
+  task: ModelTask;
+  optimization_method: OptimizationMethod;
+  workload_config: WorkloadConfig;
+  thresholds: AcceptanceThresholds;
+  status: JobStatus;
+  created_at: string;
+  updated_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  error_summary?: string | null;
+  acceptance_decision?: AcceptanceDecision | null;
+}
+
+export interface ExperimentSummaryItem {
+  id: string;
+  name: string;
+  model_id: string;
+  task: ModelTask;
+  optimization_method: OptimizationMethod;
+  status: JobStatus;
+  created_at: string;
+  updated_at: string;
+  passed?: boolean | null;
+}
+
+export interface ExperimentListResponse {
+  total: number;
+  experiments: ExperimentSummaryItem[];
+}
+
+export interface ExperimentCreate {
+  name: string;
+  model_id: string;
+  task: ModelTask;
+  optimization_method: OptimizationMethod;
+  workload_config: WorkloadConfig;
+  thresholds: AcceptanceThresholds;
+}
+
+export interface JobStatusResponse {
+  id: string;
+  experiment_id: string;
+  status: JobStatus;
+  current_step: string;
+  progress_pct: number;
+  created_at: string;
+  updated_at: string;
+  error_message?: string | null;
+}
+
+export interface HealthResponse {
+  status: string;
+  phase: string;
+  service: string;
+  version: string;
+}
+
+export interface StorageDrive {
+  drive: string;
+  total_gb: number;
+  free_gb: number;
+  free_mb: number;
+}
+
+export interface SystemSummary {
+  os: string;
+  os_release: string;
+  python_version: string;
+  total_ram_gb: number;
+  free_ram_gb: number;
+  storage: Record<string, {
+    drive: string;
+    total_gb: number;
+    free_gb: number;
+    free_mb: number;
+  }>;
+  gpu_profile: {
+    model: string;
+    vram_mb: number;
+    driver_version: string;
+    cuda_support: string;
+    concurrency_limit: number;
   };
 }
 

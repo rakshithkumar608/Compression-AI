@@ -53,6 +53,7 @@ export default function Home() {
           {activeTab === "setup" && (
             <ExperimentSetupView
               initialModel={selectedModelForSetup}
+              onExperimentComplete={() => setActiveTab("overview")}
             />
           )}
 

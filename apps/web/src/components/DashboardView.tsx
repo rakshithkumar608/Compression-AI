@@ -358,6 +358,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {exp.created_at}
                     </td>
                     <td className="py-3 px-3 text-right space-x-2">
+                      {exp.status === "completed" && (
+                        <button
+                          onClick={() => {
+                            setIsIllustrativeActive(false);
+                            setActiveTab("comparison");
+                          }}
+                          className="px-2.5 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium transition"
+                        >
+                          View Comparison
+                        </button>
+                      )}
                       {exp.status !== "completed" && exp.status !== "failed" && exp.status !== "cancelled" && (
                         <button
                           onClick={() => handleCancel(exp.id)}

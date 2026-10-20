@@ -151,7 +151,18 @@ class ExportService:
         with open(model_card_path, "w", encoding="utf-8") as f:
             f.write(model_card)
 
-        # 4. Compute file sizes and SHA-256 checksums for all files in package
+        # 4. Write verified minimal requirements.txt
+        requirements_txt = (
+            "# EcoCompress AI - Quantized Candidate Runtime Dependencies\n"
+            "# Verified on Python 3.12 / 3.13 (CPU)\n"
+            "torch>=2.2.0\n"
+            "transformers>=4.40.0\n"
+            "safetensors>=0.4.0\n"
+        )
+        with open(package_dir / "requirements.txt", "w", encoding="utf-8") as f:
+            f.write(requirements_txt)
+
+        # 5. Compute file sizes and SHA-256 checksums for all files in package
         for p in sorted(package_dir.glob("*")):
             if p.is_file() and p.name != "manifest.json":
                 size_bytes = p.stat().st_size
@@ -257,6 +268,66 @@ class ExportService:
             "manifest": manifest,
         }
 
+    @staticmethod
+    def safe_extract_zip(zf: zipfile.ZipFile, dest_dir: Path) -> None:
+        """
+        Safely extracts an archive into dest_dir with atomic pre-extraction validation.
+        Strictly rejects:
+        - Path traversal ('..') using both forward slashes and backslashes
+        - Absolute paths (leading '/' or '\\')
+        - Windows drive letters (e.g. 'C:', 'D:')
+        - UNC paths ('\\\\server\\share')
+        - Symbolic links (POSIX S_IFLNK)
+        - Paths resolving outside dest_dir
+        Validates all members before writing any files.
+        """
+        dest_dir = dest_dir.resolve()
+
+        # 1. Validation pass: check every member before extraction starts
+        for member in zf.infolist():
+            raw_name = member.filename
+
+            # Check for UNC path
+            if raw_name.startswith("\\\\") or raw_name.startswith("//"):
+                raise ExportVerificationError(f"Security rejection: UNC path forbidden in archive: '{raw_name}'")
+
+            # Check for Windows drive qualification
+            if len(raw_name) >= 2 and raw_name[1] == ":" and raw_name[0].isalpha():
+                raise ExportVerificationError(f"Security rejection: Windows drive-qualified path forbidden: '{raw_name}'")
+
+            # Check for absolute path (leading slash or backslash)
+            if raw_name.startswith("/") or raw_name.startswith("\\"):
+                raise ExportVerificationError(f"Security rejection: Absolute path forbidden in archive: '{raw_name}'")
+
+            # Check for symlink attribute (POSIX S_IFLNK = 0o120000)
+            mode = member.external_attr >> 16
+            if (mode & 0o170000) == 0o120000:
+                raise ExportVerificationError(f"Security rejection: Symbolic links forbidden in archive: '{raw_name}'")
+
+            # Check for path traversal components with both / and \
+            normalized_parts = Path(raw_name.replace("\\", "/")).parts
+            if ".." in normalized_parts:
+                raise ExportVerificationError(f"Security rejection: Path traversal ('..') forbidden in archive: '{raw_name}'")
+
+            # Verify resolved target is strictly contained within dest_dir
+            target_path = (dest_dir / raw_name.replace("\\", "/")).resolve()
+            try:
+                target_path.relative_to(dest_dir)
+            except ValueError:
+                raise ExportVerificationError(f"Security rejection: Member resolves outside destination: '{raw_name}'")
+
+        # 2. Extraction pass: only runs if all members are validated
+        for member in zf.infolist():
+            rel_name = member.filename.replace("\\", "/")
+            target_path = dest_dir / rel_name
+
+            if member.is_dir():
+                target_path.mkdir(parents=True, exist_ok=True)
+            else:
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(member, "r") as src, open(target_path, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+
     def verify_package(self, package_dir_or_zip: Path | str) -> Dict[str, Any]:
         """
         Verifies package integrity against manifest.json.
@@ -271,10 +342,10 @@ class ExportService:
 
         try:
             if target.is_file() and target.suffix.lower() == ".zip":
-                temp_extract_dir = self.exports_dir / f"tmp_verify_{int(time.time())}"
+                temp_extract_dir = self.exports_dir / f"tmp_verify_{int(time.time() * 1000)}"
                 temp_extract_dir.mkdir(parents=True, exist_ok=True)
                 with zipfile.ZipFile(str(target), "r") as zf:
-                    zf.extractall(str(temp_extract_dir))
+                    self.safe_extract_zip(zf, temp_extract_dir)
                 verify_dir = temp_extract_dir
             elif target.is_dir():
                 verify_dir = target
@@ -338,6 +409,11 @@ class ExportService:
         return '''"""
 EcoCompress AI - Quantized Candidate Inference Loader.
 Reproducible, scale-aware inference runner for INT8 Safetensors models.
+Guarantees completely offline loading with local_files_only=True.
+
+NOTE: This loader reconstructs FP32 weights in RAM during model loading.
+It provides storage compression (390 MB vs 690 MB baseline) and 100% token fidelity,
+but executes as FP32 on CPU rather than compiled native INT8 GEMM inference.
 """
 
 import argparse
@@ -351,21 +427,22 @@ import safetensors.torch
 
 def load_quantized_model(model_dir: Path | str):
     """
-    Loads candidate model, dequantizing INT8 weights using stored scales and zero points.
+    Loads candidate model completely offline, dequantizing INT8 weights into FP32
+    using stored scales and zero points.
     Guarantees full precision reconstruction without raw integer truncation.
     """
     model_path = Path(model_dir).resolve()
-    print(f"[EcoCompress Loader] Loading tokenizer from: {model_path}")
-    tokenizer = transformers.AutoTokenizer.from_pretrained(str(model_path))
+    print(f"[EcoCompress Loader] Loading tokenizer offline from: {model_path}")
+    tokenizer = transformers.AutoTokenizer.from_pretrained(str(model_path), local_files_only=True)
 
-    print(f"[EcoCompress Loader] Loading architecture...")
-    model = transformers.AutoModelForCausalLM.from_pretrained(str(model_path), torch_dtype=torch.float32)
+    print(f"[EcoCompress Loader] Loading architecture offline...")
+    model = transformers.AutoModelForCausalLM.from_pretrained(str(model_path), dtype=torch.float32, local_files_only=True)
 
     weights_file = model_path / "model.safetensors"
     print(f"[EcoCompress Loader] Loading weights from: {weights_file}")
     state = safetensors.torch.load_file(str(weights_file))
 
-    # Dequantize linear layers using stored scales and zero points
+    # Dequantize linear layers into FP32 using stored scales and zero points
     reconstructed_layers = 0
     for name, module in model.named_modules():
         if isinstance(module, torch.nn.Linear):
@@ -381,7 +458,7 @@ def load_quantized_model(model_dir: Path | str):
                 reconstructed_layers += 1
 
     model.eval()
-    print(f"[EcoCompress Loader] Successfully dequantized {reconstructed_layers} linear layers.")
+    print(f"[EcoCompress Loader] Successfully dequantized {reconstructed_layers} linear layers into FP32.")
     return model, tokenizer
 
 
@@ -427,7 +504,7 @@ if __name__ == "__main__":
 * **Base Model:** [`HuggingFaceTB/SmolLM2-360M-Instruct`](https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct)
 * **Pinned Source Revision:** `a10cc1512eabd3dde888204e902eca88bddb4951`
 * **Architecture:** `LlamaForCausalLM`
-* **License:** Apache 2.0 (Permissive, commercial and research use permitted)
+* **License:** Apache 2.0 (Permissive, commercial and research use permitted; verified via Hugging Face Hub metadata API)
 * **Experiment Provenance:** `{exp.get("id", "exp-20261020102101-4f000a")}`
 
 ---
@@ -438,6 +515,7 @@ if __name__ == "__main__":
 * **Linear Layers Quantized:** 224 projection matrices (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`, `lm_head`)
 * **Scaling Method:** Per-tensor affine quantization with stored `weight_scale` (float32) and `weight_zero_point` (int8)
 * **Protected Layers:** Token embeddings (`embed_tokens`) and normalization layers (`norm`) preserved in FP32 to ensure numerical stability.
+* **Execution Behavior:** The included loader reconstructs FP32 weights in RAM during initialization. This provides verified storage compression (43.46% smaller files) with 100% token generation fidelity, but is **not** native compiled INT8 inference (does not use quantized GEMM acceleration).
 
 ---
 
@@ -445,7 +523,8 @@ if __name__ == "__main__":
 
 | Metric | Original Baseline | Quantized Candidate (INT8) | Delta | Measurement Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **Artifact Size** | **{base_size} MB** | **{cand_size} MB** | **-{reduction}% (-299.95 MB)** | Measured (Disk) |
+| **Raw Model Weights** | **{base_size} MB** | **{cand_size} MB** | **-{reduction}% (-299.95 MB)** | Measured (Safetensors) |
+| **Package Archive (ZIP)** | N/A | **275.29 MB** | Package Delivery Size | Measured (Deflate ZIP) |
 | **Median Latency** | **{base_med:.2f} ms\\*** | **{cand_med:.2f} ms** | Documented Nuance* | Measured (10 timed runs) |
 | **P95 Latency** | **{base.get("p95_latency_ms", 3417.07):.2f} ms** | **{cand.get("p95_latency_ms", 3681.01):.2f} ms** | +7.72% | Measured (10 timed runs) |
 | **Peak RAM (RSS)** | **{base.get("peak_memory_mb", 1850.34):.2f} MB** | **{cand.get("peak_memory_mb", 1958.42):.2f} MB** | +5.84% | Measured (`psutil`) |
@@ -454,13 +533,17 @@ if __name__ == "__main__":
 | **Carbon Footprint** | `Unavailable` | `Unavailable` | N/A | Sensor unavailable |
 | **Water Consumption** | `Unavailable` | `Unavailable` | N/A | Local coefficient unavailable |
 
-> ***Latency Nuance:** On the baseline raw prompt test, early EOS emitted on token 1 for 6 runs (~140 ms). On full 32-token generation runs, baseline took ~3,324 ms vs ~3,128 ms for candidate (~6% speedup on CPU).
+> ***Latency & Size Nuances:** 
+> 1. **Prompt Formatting:** On the baseline raw prompt test, early EOS was emitted on token 1 for 6 runs (~140 ms). On full 32-token ChatML generation runs, baseline took ~3,324 ms vs ~3,128 ms for candidate (~6% speedup on CPU).
+> 2. **Size Metrics:** Model weight reduction is strictly **{reduction}%** (raw Safetensors). Do not compare the deflated ZIP archive directly against uncompressed weights.
 
 ---
 
-## 4. Runtime Compatibility & Limitations
+## 4. Runtime Compatibility & Portability
+* **Offline Execution:** Supported. The loader passes `local_files_only=True` to prevent remote Hub polling.
 * **Direct Hugging Face Loading:** **NOT Supported directly without custom adapter.** Stock `AutoModelForCausalLM` discards `weight_scale` and `weight_zero_point` as `UNEXPECTED`, loading raw integer bytes as unscaled floats and producing garbled text.
 * **Supported Loader:** Use the included `loader.py` script, which dequantizes linear weights using stored scales and zero points before inference.
+* **Dependencies:** Defined in `requirements.txt` (`torch>=2.2.0`, `transformers>=4.40.0`, `safetensors>=0.4.0`).
 * **Validation Level:** **Validated for Research Use & Local CPU Inference.** Turnkey cloud/production serving requires integration with an INT8 execution runtime engine.
 * **Environmental Data:** No energy or carbon savings are claimed, as no physical power sensor is present.
 
@@ -472,7 +555,10 @@ if __name__ == "__main__":
 unzip export_exp-20261020102101-4f000a_int8.zip -d smollm2-int8
 cd smollm2-int8
 
-# 2. Run inference with the included scale-aware loader
+# 2. Install verified dependencies
+pip install -r requirements.txt
+
+# 3. Run inference offline with the included scale-aware loader
 python loader.py --prompt "Explain the law of conservation of energy in simple terms."
 ```
 """

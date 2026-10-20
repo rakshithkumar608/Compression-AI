@@ -1,0 +1,254 @@
+{
+  "evalset_id": "smollm2_evalset_v1.0.0",
+  "version": "1.0.0",
+  "name": "SmolLM2 16-Item Evaluation Pilot",
+  "created_at": "2026-10-20T17:15:00Z",
+  "target_architecture": "SmolLM2-360M-Instruct",
+  "chat_template": "chatml",
+  "total_items": 16,
+  "description": "Standardized 16-item pilot evaluation suite covering Factual QA, Simple Reasoning, Summarization, and Instruction Following for SmolLM2-360M-Instruct.",
+  "items": [
+    {
+      "id": "FQA-01",
+      "category": "factual_qa",
+      "prompt": "What is the chemical formula for water? Answer in one word or chemical formula.",
+      "reference_answer": "H2O",
+      "max_new_tokens": 16,
+      "rubric": {
+        "type": "regex_match",
+        "pattern": "\\bH2O\\b",
+        "case_sensitive": false,
+        "max_score": 1.0,
+        "description": "Output must contain the formula H2O."
+      }
+    },
+    {
+      "id": "FQA-02",
+      "category": "factual_qa",
+      "prompt": "What planet is known as the Red Planet? Answer with the planet name only.",
+      "reference_answer": "Mars",
+      "max_new_tokens": 16,
+      "rubric": {
+        "type": "substring_match",
+        "pattern": "\\bMars\\b",
+        "case_sensitive": false,
+        "max_score": 1.0,
+        "description": "Output must identify Mars."
+      }
+    },
+    {
+      "id": "FQA-03",
+      "category": "factual_qa",
+      "prompt": "What is the capital city of France?",
+      "reference_answer": "Paris",
+      "max_new_tokens": 16,
+      "rubric": {
+        "type": "substring_match",
+        "pattern": "\\bParis\\b",
+        "case_sensitive": false,
+        "max_score": 1.0,
+        "description": "Output must identify Paris."
+      }
+    },
+    {
+      "id": "FQA-04",
+      "category": "factual_qa",
+      "prompt": "What primary force keeps planets in orbit around the Sun?",
+      "reference_answer": "Gravity",
+      "max_new_tokens": 24,
+      "rubric": {
+        "type": "substring_match",
+        "pattern": "gravit",
+        "case_sensitive": false,
+        "max_score": 1.0,
+        "description": "Output must mention gravity or gravitational force."
+      }
+    },
+    {
+      "id": "SRA-01",
+      "category": "simple_reasoning",
+      "prompt": "If a train travels at 60 miles per hour, how many miles does it travel in 3.5 hours? Show the calculation and state the final number.",
+      "reference_answer": "210",
+      "max_new_tokens": 48,
+      "rubric": {
+        "type": "numeric_extraction",
+        "expected_value": 210.0,
+        "tolerance": 0.0,
+        "max_score": 1.0,
+        "description": "Final numerical calculation must equal 210."
+      }
+    },
+    {
+      "id": "SRA-02",
+      "category": "simple_reasoning",
+      "prompt": "A box contains 12 red balls and 8 blue balls. If 5 red balls are removed, how many total balls remain in the box?",
+      "reference_answer": "15",
+      "max_new_tokens": 48,
+      "rubric": {
+        "type": "numeric_extraction",
+        "expected_value": 15.0,
+        "tolerance": 0.0,
+        "max_score": 1.0,
+        "description": "Final remaining total balls must equal 15."
+      }
+    },
+    {
+      "id": "SRA-03",
+      "category": "simple_reasoning",
+      "prompt": "John is taller than Alice. Alice is taller than Bob. Who is the shortest person?",
+      "reference_answer": "Bob",
+      "max_new_tokens": 24,
+      "rubric": {
+        "type": "substring_match",
+        "pattern": "\\bBob\\b",
+        "case_sensitive": false,
+        "max_score": 1.0,
+        "description": "Output must identify Bob as the shortest person."
+      }
+    },
+    {
+      "id": "SRA-04",
+      "category": "simple_reasoning",
+      "prompt": "What is the next number in the sequence: 2, 4, 8, 16, ...? State only the next number.",
+      "reference_answer": "32",
+      "max_new_tokens": 16,
+      "rubric": {
+        "type": "numeric_extraction",
+        "expected_value": 32.0,
+        "tolerance": 0.0,
+        "max_score": 1.0,
+        "description": "Next sequence number must be 32."
+      }
+    },
+    {
+      "id": "SSM-01",
+      "category": "short_summarization",
+      "prompt": "Summarize the following passage in one concise sentence: \"Photosynthesis is the biological process used by plants to convert light energy into chemical energy. During this process, plants absorb sunlight, water, and carbon dioxide to produce glucose and release oxygen into the atmosphere.\"",
+      "reference_answer": "Plants use sunlight, water, and carbon dioxide to create glucose and oxygen.",
+      "max_new_tokens": 48,
+      "rubric": {
+        "type": "concept_presence",
+        "required_concept_groups": [
+          ["convert", "energy", "glucose", "chemical"],
+          ["sunlight", "light", "water", "carbon dioxide", "co2"],
+          ["oxygen"]
+        ],
+        "max_sentences": 2,
+        "max_score": 1.0,
+        "description": "Must capture energy/glucose conversion, inputs (light/water/CO2), and oxygen output."
+      }
+    },
+    {
+      "id": "SSM-02",
+      "category": "short_summarization",
+      "prompt": "Summarize in one sentence the primary benefit of model quantization: \"Quantization reduces the precision of model weights from 32-bit floating point to lower-bit formats like 8-bit integers, which drastically shrinks memory storage and accelerates inference on resource-constrained devices.\"",
+      "reference_answer": "Quantization lowers weight precision to reduce memory storage and speed up inference on resource-constrained devices.",
+      "max_new_tokens": 48,
+      "rubric": {
+        "type": "concept_presence",
+        "required_concept_groups": [
+          ["precision", "weight", "storage", "shrink", "size", "bit"],
+          ["memory", "inference", "device", "accelerat", "resource", "speed"]
+        ],
+        "max_sentences": 2,
+        "max_score": 1.0,
+        "description": "Must mention weight/precision reduction and memory/speed benefits on devices."
+      }
+    },
+    {
+      "id": "SSM-03",
+      "category": "short_summarization",
+      "prompt": "In one sentence, summarize why reproducible benchmarking requires fixed random seeds and warm-up runs.",
+      "reference_answer": "Fixed seeds and warm-up runs eliminate initial cold-start variance and guarantee consistent, reproducible measurements.",
+      "max_new_tokens": 48,
+      "rubric": {
+        "type": "concept_presence",
+        "required_concept_groups": [
+          ["cold-start", "warmup", "warm-up", "variance", "stabil", "initial"],
+          ["reproducib", "repeatab", "determinis", "consisten", "fair"]
+        ],
+        "max_sentences": 2,
+        "max_score": 1.0,
+        "description": "Must mention stabilizing cold-start variance and ensuring reproducibility/consistency."
+      }
+    },
+    {
+      "id": "SSM-04",
+      "category": "short_summarization",
+      "prompt": "Summarize the main role of a CPU cache in computing in 20 words or fewer.",
+      "reference_answer": "A CPU cache stores frequently accessed data in high-speed temporary memory to reduce access latency.",
+      "max_new_tokens": 40,
+      "rubric": {
+        "type": "concept_presence",
+        "required_concept_groups": [
+          ["fast", "high-speed", "speed", "temporary", "frequent", "cache"],
+          ["latency", "access", "retrieval", "cpu", "memory"]
+        ],
+        "max_words": 30,
+        "max_score": 1.0,
+        "description": "Must describe high-speed/temporary memory reducing latency/speeding access, concisely."
+      }
+    },
+    {
+      "id": "IFC-01",
+      "category": "instruction_following",
+      "prompt": "List exactly three primary colors. Output them as a hyphenated bullet list with no other text.",
+      "reference_answer": "- Red\n- Blue\n- Yellow",
+      "max_new_tokens": 32,
+      "rubric": {
+        "type": "bullet_list_constraint",
+        "expected_items": 3,
+        "bullet_prefix": "-",
+        "required_keywords": ["red", "blue", "yellow"],
+        "max_score": 1.0,
+        "description": "Must be exactly 3 items starting with '-', containing red, blue, and yellow."
+      }
+    },
+    {
+      "id": "IFC-02",
+      "category": "instruction_following",
+      "prompt": "Output a valid JSON object with exactly two keys: \"model\" with value \"SmolLM2\" and \"quantized\" with value true. Do not include markdown code fences or explanatory text.",
+      "reference_answer": "{\"model\": \"SmolLM2\", \"quantized\": true}",
+      "max_new_tokens": 32,
+      "rubric": {
+        "type": "json_constraint",
+        "expected_keys": ["model", "quantized"],
+        "expected_values": {
+          "model": "SmolLM2",
+          "quantized": true
+        },
+        "max_score": 1.0,
+        "description": "Must be valid JSON parseable by json.loads() with exact keys and values."
+      }
+    },
+    {
+      "id": "IFC-03",
+      "category": "instruction_following",
+      "prompt": "Answer this question with either the single word 'Yes' or 'No' and nothing else: Is Python an interpreted programming language?",
+      "reference_answer": "Yes",
+      "max_new_tokens": 10,
+      "rubric": {
+        "type": "single_word_choice",
+        "expected_choice": "Yes",
+        "allowed_choices": ["Yes", "No"],
+        "max_score": 1.0,
+        "description": "Must output exactly 'Yes'."
+      }
+    },
+    {
+      "id": "IFC-04",
+      "category": "instruction_following",
+      "prompt": "Write a two-line poem about computing. Line 1 must end with 'byte' and Line 2 must end with 'light'.",
+      "reference_answer": "Data flows in every byte,\nGlowing on the screen in light.",
+      "max_new_tokens": 40,
+      "rubric": {
+        "type": "rhyme_line_constraint",
+        "expected_lines": 2,
+        "line1_end": "byte",
+        "line2_end": "light",
+        "max_score": 1.0,
+        "description": "Must have exactly 2 lines, ending with 'byte' and 'light'."
+      }
+    }
+  ]
+}

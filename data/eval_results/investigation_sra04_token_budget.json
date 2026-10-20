@@ -1,0 +1,151 @@
+{
+  "investigation_id": "phase9c_sra04_token_budget",
+  "timestamp": "2026-10-20 11:51:47 UTC",
+  "target_prompt": "What is the next number in the sequence: 2, 4, 8, 16, ...? State only the next number.",
+  "expected_answer": "32",
+  "rubric": {
+    "type": "numeric_extraction",
+    "expected_value": 32.0,
+    "tolerance": 0.0,
+    "max_score": 1.0,
+    "description": "Next sequence number must be 32."
+  },
+  "token_budgets_tested": [
+    16,
+    32,
+    64
+  ],
+  "baseline_runs": {
+    "tokens_16": {
+      "max_new_tokens_setting": 16,
+      "generated_token_count": 12,
+      "latency_ms": 1847.4,
+      "throughput_tps": 6.5,
+      "reached_eos": true,
+      "finish_reason": "eos_token",
+      "raw_completion": "The next number in the sequence is 32.<|im_end|>",
+      "clean_completion": "The next number in the sequence is 32.",
+      "score": 1.0,
+      "passed": true,
+      "explanation": "Extracted number 32.0 matches expected 32.0 (tolerance 0.0).",
+      "extracted_details": {
+        "extracted_numbers": [
+          32.0
+        ],
+        "matched_value": 32.0
+      },
+      "rss_mb": 1840.4
+    },
+    "tokens_32": {
+      "max_new_tokens_setting": 32,
+      "generated_token_count": 12,
+      "latency_ms": 1799.12,
+      "throughput_tps": 6.67,
+      "reached_eos": true,
+      "finish_reason": "eos_token",
+      "raw_completion": "The next number in the sequence is 32.<|im_end|>",
+      "clean_completion": "The next number in the sequence is 32.",
+      "score": 1.0,
+      "passed": true,
+      "explanation": "Extracted number 32.0 matches expected 32.0 (tolerance 0.0).",
+      "extracted_details": {
+        "extracted_numbers": [
+          32.0
+        ],
+        "matched_value": 32.0
+      },
+      "rss_mb": 1840.23
+    },
+    "tokens_64": {
+      "max_new_tokens_setting": 64,
+      "generated_token_count": 12,
+      "latency_ms": 1454.25,
+      "throughput_tps": 8.25,
+      "reached_eos": true,
+      "finish_reason": "eos_token",
+      "raw_completion": "The next number in the sequence is 32.<|im_end|>",
+      "clean_completion": "The next number in the sequence is 32.",
+      "score": 1.0,
+      "passed": true,
+      "explanation": "Extracted number 32.0 matches expected 32.0 (tolerance 0.0).",
+      "extracted_details": {
+        "extracted_numbers": [
+          32.0
+        ],
+        "matched_value": 32.0
+      },
+      "rss_mb": 1841.67
+    }
+  },
+  "candidate_runs": {
+    "tokens_16": {
+      "max_new_tokens_setting": 16,
+      "generated_token_count": 16,
+      "latency_ms": 1786.7,
+      "throughput_tps": 8.96,
+      "reached_eos": false,
+      "finish_reason": "max_tokens_reached",
+      "raw_completion": "The next number in the sequence: 2, 4, 8,",
+      "clean_completion": "The next number in the sequence: 2, 4, 8,",
+      "score": 0.0,
+      "passed": false,
+      "explanation": "Extracted numbers [2.0, 4.0, 8.0] did not match expected 32.0.",
+      "extracted_details": {
+        "extracted_numbers": [
+          2.0,
+          4.0,
+          8.0
+        ]
+      },
+      "rss_mb": 2250.53
+    },
+    "tokens_32": {
+      "max_new_tokens_setting": 32,
+      "generated_token_count": 27,
+      "latency_ms": 3429.65,
+      "throughput_tps": 7.87,
+      "reached_eos": true,
+      "finish_reason": "eos_token",
+      "raw_completion": "The next number in the sequence: 2, 4, 8, 16, ... is 32.<|im_end|>",
+      "clean_completion": "The next number in the sequence: 2, 4, 8, 16, ... is 32.",
+      "score": 1.0,
+      "passed": true,
+      "explanation": "Extracted number 32.0 matches expected 32.0 (tolerance 0.0).",
+      "extracted_details": {
+        "extracted_numbers": [
+          2.0,
+          4.0,
+          8.0,
+          16.0,
+          32.0
+        ],
+        "matched_value": 32.0
+      },
+      "rss_mb": 2250.22
+    },
+    "tokens_64": {
+      "max_new_tokens_setting": 64,
+      "generated_token_count": 27,
+      "latency_ms": 2944.82,
+      "throughput_tps": 9.17,
+      "reached_eos": true,
+      "finish_reason": "eos_token",
+      "raw_completion": "The next number in the sequence: 2, 4, 8, 16, ... is 32.<|im_end|>",
+      "clean_completion": "The next number in the sequence: 2, 4, 8, 16, ... is 32.",
+      "score": 1.0,
+      "passed": true,
+      "explanation": "Extracted number 32.0 matches expected 32.0 (tolerance 0.0).",
+      "extracted_details": {
+        "extracted_numbers": [
+          2.0,
+          4.0,
+          8.0,
+          16.0,
+          32.0
+        ],
+        "matched_value": 32.0
+      },
+      "rss_mb": 2249.47
+    }
+  }
+}

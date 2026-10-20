@@ -189,6 +189,7 @@ class TestPhase7ExportPackaging(unittest.TestCase):
         self.assertTrue((pkg_path / "MODEL_CARD.md").exists())
         self.assertTrue((pkg_path / "model.safetensors").exists())
         self.assertTrue((pkg_path / "config.json").exists())
+        self.assertTrue((pkg_path / "requirements.txt").exists())
 
     def test_06_manifest_integrity_and_truthfulness(self):
         """Verifies manifest data structure, provenance, and absence of fabricated metrics."""
@@ -290,6 +291,128 @@ class TestPhase7ExportPackaging(unittest.TestCase):
         code = loader_path.read_text(encoding="utf-8")
         compiled = compile(code, str(loader_path), "exec")
         self.assertIsNotNone(compiled)
+
+    def test_13_security_rejects_path_traversal_forward_slash(self):
+        """Priority 0 Security: Rejects ZIP archives containing '../' relative traversal."""
+        import zipfile
+        bad_zip = self.test_root / "evil_traversal_forward.zip"
+        outside_marker = self.test_root / "evil_marker_forward.txt"
+        if outside_marker.exists():
+            outside_marker.unlink()
+
+        with zipfile.ZipFile(str(bad_zip), "w") as zf:
+            zf.writestr("../evil_marker_forward.txt", "MALICIOUS CONTENT")
+            zf.writestr("manifest.json", "{}")
+
+        with self.assertRaises(ExportVerificationError) as ctx:
+            self.export_service.verify_package(bad_zip)
+        self.assertIn("Path traversal", str(ctx.exception))
+        self.assertFalse(outside_marker.exists())
+
+    def test_14_security_rejects_path_traversal_backslash(self):
+        """Priority 0 Security: Rejects ZIP archives containing '..\\' Windows backslash traversal."""
+        import zipfile
+        bad_zip = self.test_root / "evil_traversal_back.zip"
+        outside_marker = self.test_root / "evil_marker_back.txt"
+        if outside_marker.exists():
+            outside_marker.unlink()
+
+        with zipfile.ZipFile(str(bad_zip), "w") as zf:
+            zf.writestr("..\\evil_marker_back.txt", "MALICIOUS CONTENT")
+            zf.writestr("manifest.json", "{}")
+
+        with self.assertRaises(ExportVerificationError) as ctx:
+            self.export_service.verify_package(bad_zip)
+        self.assertIn("Path traversal", str(ctx.exception))
+        self.assertFalse(outside_marker.exists())
+
+    def test_15_security_rejects_absolute_path_posix(self):
+        """Priority 0 Security: Rejects ZIP archives containing POSIX absolute paths."""
+        import zipfile
+        bad_zip = self.test_root / "evil_absolute_posix.zip"
+        with zipfile.ZipFile(str(bad_zip), "w") as zf:
+            zf.writestr("/etc/passwd_evil.txt", "MALICIOUS CONTENT")
+            zf.writestr("manifest.json", "{}")
+
+        with self.assertRaises(ExportVerificationError) as ctx:
+            self.export_service.verify_package(bad_zip)
+        self.assertIn("Absolute path", str(ctx.exception))
+
+    def test_16_security_rejects_windows_drive_path(self):
+        """Priority 0 Security: Rejects ZIP archives containing Windows drive-qualified paths."""
+        import zipfile
+        bad_zip = self.test_root / "evil_drive_path.zip"
+        with zipfile.ZipFile(str(bad_zip), "w") as zf:
+            zf.writestr("C:\\Windows\\System32\\evil.dll", "MALICIOUS CONTENT")
+            zf.writestr("manifest.json", "{}")
+
+        with self.assertRaises(ExportVerificationError) as ctx:
+            self.export_service.verify_package(bad_zip)
+        self.assertIn("Windows drive-qualified path", str(ctx.exception))
+
+    def test_17_security_rejects_unc_path(self):
+        """Priority 0 Security: Rejects ZIP archives containing UNC network paths."""
+        import zipfile
+        bad_zip = self.test_root / "evil_unc_path.zip"
+        with zipfile.ZipFile(str(bad_zip), "w") as zf:
+            zf.writestr("\\\\attacker.com\\share\\evil.txt", "MALICIOUS CONTENT")
+            zf.writestr("manifest.json", "{}")
+
+        with self.assertRaises(ExportVerificationError) as ctx:
+            self.export_service.verify_package(bad_zip)
+        self.assertIn("UNC path", str(ctx.exception))
+
+    def test_18_security_allows_valid_nested_directories(self):
+        """Priority 0 Security: Allows legitimate nested relative subdirectories."""
+        import zipfile
+        nested_zip = self.test_root / "valid_nested.zip"
+        extract_dest = self.test_root / "valid_nested_extracted"
+        extract_dest.mkdir(parents=True, exist_ok=True)
+
+        with zipfile.ZipFile(str(nested_zip), "w") as zf:
+            zf.writestr("models/subfolder/config.json", '{"nested": true}')
+            zf.writestr("metadata/provenance.json", '{"provenance": true}')
+
+        with zipfile.ZipFile(str(nested_zip), "r") as zf:
+            self.export_service.safe_extract_zip(zf, extract_dest)
+
+        self.assertTrue((extract_dest / "models" / "subfolder" / "config.json").exists())
+        self.assertTrue((extract_dest / "metadata" / "provenance.json").exists())
+
+    def test_19_security_atomic_rejection_no_partial_writes(self):
+        """Priority 0 Security: Pre-extraction validation blocks partial writes on mixed archives."""
+        import zipfile
+        mixed_zip = self.test_root / "mixed_malicious.zip"
+        extract_dest = self.test_root / "atomic_extract_dest"
+        extract_dest.mkdir(parents=True, exist_ok=True)
+
+        with zipfile.ZipFile(str(mixed_zip), "w") as zf:
+            zf.writestr("valid_file_1.txt", "VALID FILE 1")
+            zf.writestr("..\\evil_escape.txt", "EVIL ESCAPE")
+            zf.writestr("valid_file_2.txt", "VALID FILE 2")
+
+        with zipfile.ZipFile(str(mixed_zip), "r") as zf:
+            with self.assertRaises(ExportVerificationError):
+                self.export_service.safe_extract_zip(zf, extract_dest)
+
+        # Confirm ZERO files were written before rejection
+        extracted_files = list(extract_dest.glob("*"))
+        self.assertEqual(len(extracted_files), 0, "Partial write detected! Security invariant violated.")
+
+    def test_20_loader_has_local_files_only(self):
+        """Priority 1 Portability: Loader specifies local_files_only=True and has requirements.txt."""
+        loader_path = self.exports_dir / f"export_{self.exp_id}_int8" / "loader.py"
+        self.assertTrue(loader_path.exists())
+        code = loader_path.read_text(encoding="utf-8")
+        self.assertIn("local_files_only=True", code)
+
+        req_path = self.exports_dir / f"export_{self.exp_id}_int8" / "requirements.txt"
+        self.assertTrue(req_path.exists())
+        req_content = req_path.read_text(encoding="utf-8")
+        self.assertIn("torch", req_content)
+        self.assertIn("transformers", req_content)
+        self.assertIn("safetensors", req_content)
+
 
 
 if __name__ == "__main__":

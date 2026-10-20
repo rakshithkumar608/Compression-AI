@@ -21,6 +21,8 @@ from schemas import (
     JobStatusResponse,
     WorkloadConfig,
     AcceptanceThresholds,
+    BenchmarkMetric,
+    BenchmarkSummary,
 )
 
 
@@ -82,8 +84,7 @@ class ExperimentService:
                 raise ExperimentNotFoundError(f"Experiment '{exp_id}' not found.")
 
             # Load any attached benchmark results
-            # (Phase 2 includes schema support for results)
-            return self._row_to_response(row)
+            return self._row_to_response(row, conn)
 
     def list_experiments(self, limit: int = 50, offset: int = 0) -> ExperimentListResponse:
         """Returns paginated summaries of experiments."""
@@ -255,7 +256,65 @@ class ExperimentService:
             updated_at=now,
         )
 
-    def _row_to_response(self, row) -> ExperimentResponse:
+    def _load_benchmark_summary(self, conn, experiment_id: str, candidate_type: str) -> Optional[BenchmarkSummary]:
+        """Loads benchmark metrics summary from benchmark_results table."""
+        cur = conn.execute(
+            """
+            SELECT * FROM benchmark_results
+            WHERE experiment_id = ? AND candidate_type = ?
+            ORDER BY id DESC LIMIT 1
+            """,
+            (experiment_id, candidate_type),
+        )
+        b = cur.fetchone()
+        if not b:
+            return None
+
+        return BenchmarkSummary(
+            artifact_size_mb=BenchmarkMetric(
+                value=b["artifact_size_mb"],
+                unit="MB",
+                type="measured" if b["artifact_size_mb"] is not None else "unavailable",
+            ),
+            median_latency_ms=BenchmarkMetric(
+                value=b["median_latency_ms"],
+                unit="ms",
+                type="measured" if b["median_latency_ms"] is not None else "unavailable",
+            ),
+            p95_latency_ms=BenchmarkMetric(
+                value=b["p95_latency_ms"],
+                unit="ms",
+                type="measured" if b["p95_latency_ms"] is not None else "unavailable",
+            ),
+            peak_memory_mb=BenchmarkMetric(
+                value=b["peak_memory_mb"],
+                unit="MB",
+                type="measured" if b["peak_memory_mb"] is not None else "unavailable",
+            ),
+            quality_score=BenchmarkMetric(
+                value=b["quality_score"],
+                unit="%",
+                type="measured" if b["quality_score"] is not None else "unavailable",
+                notes=b["quality_metric_name"],
+            ),
+            energy_joules=BenchmarkMetric(
+                value=b["energy_joules"],
+                unit="J",
+                type=b["energy_measurement_type"] or "unavailable",
+            ),
+            carbon_grams=BenchmarkMetric(
+                value=b["carbon_grams"],
+                unit="gCO2e",
+                type=b["carbon_measurement_type"] or "unavailable",
+            ),
+            water_milliliters=BenchmarkMetric(
+                value=b["water_milliliters"],
+                unit="mL",
+                type=b["water_measurement_type"] or "unavailable",
+            ),
+        )
+
+    def _row_to_response(self, row, conn=None) -> ExperimentResponse:
         workload_dict = json.loads(row["workload_config"])
         thresholds_dict = json.loads(row["thresholds"])
 
@@ -265,6 +324,16 @@ class ExperimentService:
                 dec = AcceptanceDecision(**json.loads(row["acceptance_decision"]))
             except Exception:
                 pass
+
+        baseline_metrics = None
+        candidate_metrics = None
+        if conn is not None:
+            baseline_metrics = self._load_benchmark_summary(conn, row["id"], "baseline")
+            candidate_metrics = self._load_benchmark_summary(conn, row["id"], "candidate")
+        elif self.db_path:
+            with get_db(self.db_path) as c:
+                baseline_metrics = self._load_benchmark_summary(c, row["id"], "baseline")
+                candidate_metrics = self._load_benchmark_summary(c, row["id"], "candidate")
 
         return ExperimentResponse(
             id=row["id"],
@@ -281,4 +350,6 @@ class ExperimentService:
             completed_at=row["completed_at"],
             error_summary=row["error_summary"],
             acceptance_decision=dec,
+            baseline_metrics=baseline_metrics,
+            candidate_metrics=candidate_metrics,
         )

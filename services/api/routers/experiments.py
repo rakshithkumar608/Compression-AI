@@ -10,15 +10,24 @@ from schemas import (
     ExperimentListResponse,
     JobStatusResponse,
     ErrorResponse,
+    BenchmarkConfigSchema,
+    BenchmarkDetailResponse,
 )
 from services.experiment_service import (
     ExperimentService,
     ExperimentNotFoundError,
     InvalidStateTransitionError,
 )
+from services.benchmark_engine import (
+    BenchmarkEngine,
+    BenchmarkConfigError,
+    BenchmarkCancelledError,
+    BenchmarkExecutionError,
+)
 
 router = APIRouter(prefix="/experiments", tags=["Experiments"])
 service = ExperimentService()
+benchmark_engine = BenchmarkEngine()
 
 
 @router.post(
@@ -98,6 +107,81 @@ def run_experiment(exp_id: str):
         )
 
 
+@router.get(
+    "/{exp_id}/benchmark",
+    response_model=BenchmarkDetailResponse,
+    responses={
+        404: {"model": ErrorResponse, "description": "Benchmark results not found"},
+    },
+)
+def get_benchmark_detail(exp_id: str, candidate_type: str = Query(default="baseline")):
+    """Retrieves detailed benchmark results including latency distribution and device profile."""
+    try:
+        service.get_experiment(exp_id)
+    except ExperimentNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Experiment '{exp_id}' was not found in the database.",
+        )
+
+    res = benchmark_engine.get_benchmark_detail(exp_id, candidate_type=candidate_type)
+    if not res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No {candidate_type} benchmark results recorded yet for experiment '{exp_id}'.",
+        )
+    return res
+
+
+@router.post(
+    "/{exp_id}/benchmark/synthetic",
+    response_model=BenchmarkDetailResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {"model": ErrorResponse, "description": "Benchmark configuration error"},
+        404: {"model": ErrorResponse, "description": "Experiment not found"},
+        409: {"model": ErrorResponse, "description": "Benchmark cancelled or state conflict"},
+    },
+)
+def run_synthetic_benchmark(
+    exp_id: str,
+    config: BenchmarkConfigSchema = None,
+):
+    """
+    Executes a reproducible synthetic benchmark for the specified experiment.
+    Useful for testing, dry-runs, and contract verification without downloading weights.
+    """
+    try:
+        service.get_experiment(exp_id)
+    except ExperimentNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Experiment '{exp_id}' was not found in the database.",
+        )
+
+    cfg = config or BenchmarkConfigSchema()
+    try:
+        return benchmark_engine.run_synthetic_benchmark(
+            experiment_id=exp_id,
+            config=cfg,
+        )
+    except BenchmarkConfigError as bce:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(bce),
+        )
+    except BenchmarkCancelledError as ce:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(ce),
+        )
+    except BenchmarkExecutionError as ee:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(ee),
+        )
+
+
 @router.post(
     "/{exp_id}/cancel",
     response_model=ExperimentResponse,
@@ -122,4 +206,79 @@ def cancel_experiment(exp_id: str):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e),
+        )
+
+
+@router.get(
+    "/{exp_id}/benchmark",
+    response_model=BenchmarkDetailResponse,
+    responses={
+        404: {"model": ErrorResponse, "description": "Benchmark results not found"},
+    },
+)
+def get_benchmark_detail(exp_id: str, candidate_type: str = Query(default="baseline")):
+    """Retrieves detailed benchmark results including latency distribution and device profile."""
+    try:
+        service.get_experiment(exp_id)
+    except ExperimentNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Experiment '{exp_id}' was not found in the database.",
+        )
+
+    res = benchmark_engine.get_benchmark_detail(exp_id, candidate_type=candidate_type)
+    if not res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No {candidate_type} benchmark results recorded yet for experiment '{exp_id}'.",
+        )
+    return res
+
+
+@router.post(
+    "/{exp_id}/benchmark/synthetic",
+    response_model=BenchmarkDetailResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {"model": ErrorResponse, "description": "Benchmark configuration error"},
+        404: {"model": ErrorResponse, "description": "Experiment not found"},
+        409: {"model": ErrorResponse, "description": "Benchmark cancelled or state conflict"},
+    },
+)
+def run_synthetic_benchmark(
+    exp_id: str,
+    config: BenchmarkConfigSchema = None,
+):
+    """
+    Executes a reproducible synthetic benchmark for the specified experiment.
+    Useful for testing, dry-runs, and contract verification without downloading weights.
+    """
+    try:
+        service.get_experiment(exp_id)
+    except ExperimentNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Experiment '{exp_id}' was not found in the database.",
+        )
+
+    cfg = config or BenchmarkConfigSchema()
+    try:
+        return benchmark_engine.run_synthetic_benchmark(
+            experiment_id=exp_id,
+            config=cfg,
+        )
+    except BenchmarkConfigError as bce:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(bce),
+        )
+    except BenchmarkCancelledError as ce:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(ce),
+        )
+    except BenchmarkExecutionError as ee:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(ee),
         )

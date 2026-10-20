@@ -70,9 +70,22 @@ def init_db(db_path: Path | str | None = None) -> None:
                 warmup_runs INTEGER,
                 hardware_device TEXT,
                 recorded_at TEXT NOT NULL,
+                runtime_name TEXT,
+                model_revision TEXT,
+                metadata_json TEXT,
                 FOREIGN KEY (experiment_id) REFERENCES experiments (id) ON DELETE CASCADE
             );
         """)
+
+        # Safe migration for existing databases: check for new columns
+        cur = conn.execute("PRAGMA table_info(benchmark_results);")
+        existing_cols = [row[1] for row in cur.fetchall()]
+        if "runtime_name" not in existing_cols:
+            conn.execute("ALTER TABLE benchmark_results ADD COLUMN runtime_name TEXT;")
+        if "model_revision" not in existing_cols:
+            conn.execute("ALTER TABLE benchmark_results ADD COLUMN model_revision TEXT;")
+        if "metadata_json" not in existing_cols:
+            conn.execute("ALTER TABLE benchmark_results ADD COLUMN metadata_json TEXT;")
 
         # 3. Jobs Table (Decoupled background worker dispatch tracking)
         conn.execute("""

@@ -195,3 +195,62 @@ class ErrorResponse(BaseModel):
     detail: str
     code: str
     hint: Optional[str] = None
+
+
+class BenchmarkConfigSchema(BaseModel):
+    warmup_runs: int = Field(default=5, ge=0, le=100)
+    measured_runs: int = Field(default=20, ge=1, le=500)
+    batch_size: int = Field(default=1, ge=1, le=64)
+    sequence_length: int = Field(default=128, ge=8, le=4096)
+    target_device: str = Field(default="cpu")
+    random_seed: int = Field(default=42)
+    timeout_seconds: float = Field(default=300.0, ge=1.0)
+    collect_memory: bool = Field(default=True)
+
+
+class LatencyDetailSchema(BaseModel):
+    median_ms: float
+    p95_ms: float
+    mean_ms: float
+    min_ms: float
+    max_ms: float
+    std_dev_ms: float
+    sample_count: int
+    raw_samples_ms: Optional[List[float]] = None
+
+
+class MemoryDetailSchema(BaseModel):
+    baseline_rss_mb: float
+    peak_rss_mb: float
+    peak_rss_delta_mb: float
+    peak_gpu_mb: Optional[float] = None
+    gpu_device_name: Optional[str] = None
+    measurement_type: str = "measured"
+    notes: Optional[str] = None
+
+
+class BenchmarkDetailResponse(BaseModel):
+    id: Optional[int] = None
+    experiment_id: str
+    candidate_type: str  # 'baseline' or 'candidate'
+    model_id: str
+    model_revision: Optional[str] = None
+    artifact_size_mb: Optional[float] = None
+    latency: LatencyDetailSchema
+    memory: MemoryDetailSchema
+    quality_score: Optional[float] = None
+    quality_metric_name: Optional[str] = None
+    energy_joules: Optional[float] = None
+    energy_measurement_type: str = "unavailable"
+    carbon_grams: Optional[float] = None
+    carbon_measurement_type: str = "unavailable"
+    water_milliliters: Optional[float] = None
+    water_measurement_type: str = "unavailable"
+    measured_runs: int
+    warmup_runs: int
+    hardware_device: str
+    runtime_name: str
+    workload_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    limitations: List[str] = Field(default_factory=list)
+    notes: Optional[str] = None
+    recorded_at: str

@@ -18,7 +18,7 @@ from fastapi.exceptions import RequestValidationError
 
 from config import settings
 from database import init_db
-from routers import health, experiments, hardware, models
+from routers import health, experiments, hardware, models, exports
 from schemas import ErrorResponse
 
 
@@ -52,6 +52,7 @@ app.include_router(health.router)
 app.include_router(experiments.router)
 app.include_router(hardware.router)
 app.include_router(models.router)
+app.include_router(exports.router)
 
 
 # Global Exception Handlers for Uniform Error Responses

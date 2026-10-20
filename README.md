@@ -260,3 +260,4 @@ The loader automatically reads INT8 weights, reconstructs full-precision FP32 ma
 
 EcoCompress AI is distributed under the **Apache 2.0 License**.  
 Model weights for `SmolLM2-360M-Instruct` are attributed to the Hugging Face TB team under the Apache 2.0 license.
+   
